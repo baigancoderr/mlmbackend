@@ -2,62 +2,72 @@ import { Telegraf } from "telegraf";
 import User from "../models/User.js";
 import { generateRefId } from "../utils/generateRefId.js";
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+const createBot = () => {
+  // 🔐 Safety check
+  if (!process.env.BOT_TOKEN) {
+    throw new Error("❌ BOT_TOKEN missing in .env");
+  }
 
-// 🚀 START COMMAND (Referral Handle)
-bot.start(async (ctx) => {
-  try {
-    const telegramId = ctx.from.id.toString();
-    const username = ctx.from.username || "no_username";
+  console.log("✅ BOT TOKEN LOADED:", process.env.BOT_TOKEN);
 
-    // 👇 referral param (IMPORTANT)
-    const ref = ctx.startPayload || process.env.DEFAULT_REF;
+  const bot = new Telegraf(process.env.BOT_TOKEN);
 
-    let user = await User.findOne({ telegramId });
+  // 🚀 START COMMAND (Referral Handle)
+  bot.start(async (ctx) => {
+    try {
+      const telegramId = ctx.from.id.toString();
+      const username = ctx.from.username || "no_username";
 
-    if (!user) {
-      const newRefId = generateRefId();
+      // 👇 referral param
+      const ref = ctx.startPayload || process.env.DEFAULT_REF;
 
-      user = new User({
-        telegramId,
-        username,
-        referralId: newRefId,
-        referredBy: ref
-      });
+      let user = await User.findOne({ telegramId });
 
-      await user.save();
+      if (!user) {
+        const newRefId = generateRefId();
 
-      // 👇 Parent add
-      const parent = await User.findOne({ referralId: ref });
-      if (parent) {
-        parent.referrals.push(user._id);
-        await parent.save();
-      }
-    }
+        user = new User({
+          telegramId,
+          username,
+          referralId: newRefId,
+          referredBy: ref
+        });
 
-    const referralLink = `https://t.me/${process.env.BOT_USERNAME}?start=${user.referralId}`;
+        await user.save();
 
-    // 🎯 Mini App Button
-    await ctx.reply(
-      `🔥 Welcome ${username}\n\n` +
-      `Your Referral Link:\n${referralLink}`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "🚀 Open App",
-                web_app: { url: process.env.WEB_APP_URL }
-              }
-            ]
-          ]
+        // 👇 Parent update
+        const parent = await User.findOne({ referralId: ref });
+        if (parent) {
+          parent.referrals.push(user._id);
+          await parent.save();
         }
       }
-    );
 
-  } catch (err) {
-    console.log(err);
-  }
-});
+      const referralLink = `https://t.me/${process.env.BOT_USERNAME}?start=${user.referralId}`;
 
-export default bot;
+      // 🎯 Reply with button
+      await ctx.reply(
+        `🔥 Welcome ${username}\n\nYour Referral Link:\n${referralLink}`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🚀 Open App",
+                  web_app: { url: process.env.WEB_APP_URL }
+                }
+              ]
+            ]
+          }
+        }
+      );
+
+    } catch (err) {
+      console.log("❌ BOT ERROR:", err);
+    }
+  });
+
+  return bot;
+};
+
+export default createBot;

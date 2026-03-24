@@ -1,14 +1,16 @@
 import dotenv from "dotenv";
-import mongoose from "mongoose";
-import bot from "./bot/bot.js";
+dotenv.config(); // 👈 sabse pehle
 
-dotenv.config();
+import connectDB from "./config/db.js";
+import createBot from "./bot/bot.js";
+
+console.log("BOT TOKEN:", process.env.BOT_TOKEN);
 
 const start = async () => {
-  await mongoose.connect(process.env.MONGO_URI);
-  console.log("✅ DB Connected");
+  await connectDB();
 
-  // 🤖 Bot Start
+  const bot = createBot(); // 👈 ab safe init
+
   bot.launch();
   console.log("🤖 Bot Started");
 
