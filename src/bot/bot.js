@@ -3,41 +3,58 @@ import User from "../models/User.js";
 import { generateRefId } from "../utils/generateRefId.js";
 
 const createBot = () => {
-  // 🔐 Safety check
   if (!process.env.BOT_TOKEN) {
     throw new Error("❌ BOT_TOKEN missing in .env");
   }
 
-  console.log("✅ BOT TOKEN LOADED:", process.env.BOT_TOKEN);
-
   const bot = new Telegraf(process.env.BOT_TOKEN);
 
-  // 🚀 START COMMAND (Referral Handle)
   bot.start(async (ctx) => {
     try {
       const telegramId = ctx.from.id.toString();
       const username = ctx.from.username || "no_username";
 
-      // 👇 referral param
-      const ref = ctx.startPayload || process.env.DEFAULT_REF;
+      const ref = ctx.startPayload;
 
       let user = await User.findOne({ telegramId });
 
       if (!user) {
-        const newRefId = generateRefId();
+        const userCount = await User.countDocuments();
 
-        user = new User({
-          telegramId,
-          username,
-          referralId: newRefId,
-          referredBy: ref
-        });
+        // 🟢 FIRST USER
+        if (userCount === 0) {
+          const newRefId = generateRefId();
 
-        await user.save();
+          user = new User({
+            telegramId,
+            username,
+            referralId: newRefId
+          });
 
-        // 👇 Parent update
-        const parent = await User.findOne({ referralId: ref });
-        if (parent) {
+          await user.save();
+        } else {
+          // 🔴 REFERRAL REQUIRED
+          if (!ref) {
+            return ctx.reply("❌ Referral required to join");
+          }
+
+          const parent = await User.findOne({ referralId: ref });
+
+          if (!parent) {
+            return ctx.reply("❌ Invalid referral link");
+          }
+
+          const newRefId = generateRefId();
+
+          user = new User({
+            telegramId,
+            username,
+            referralId: newRefId,
+            referredBy: ref
+          });
+
+          await user.save();
+
           parent.referrals.push(user._id);
           await parent.save();
         }
@@ -45,9 +62,11 @@ const createBot = () => {
 
       const referralLink = `https://t.me/${process.env.BOT_USERNAME}?start=${user.referralId}`;
 
-      // 🎯 Reply with button
       await ctx.reply(
-        `🔥 Welcome ${username}\n\nYour Referral Link:\n${referralLink}`,
+        `🔥 Welcome ${username}
+
+Your Referral Link:
+${referralLink}`,
         {
           reply_markup: {
             inline_keyboard: [

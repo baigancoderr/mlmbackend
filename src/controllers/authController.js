@@ -11,31 +11,50 @@ export const loginUser = async (req, res) => {
 
     let user = await User.findOne({ telegramId });
 
-    // 🆕 New User
+    // 🆕 NEW USER
     if (!user) {
-      let refId = generateRefId();
+      const userCount = await User.countDocuments();
 
-      user = new User({
-        telegramId,
-        username,
-        referralId: refId,
-        referredBy: ref || process.env.DEFAULT_REF
-      });
+      // 🟢 FIRST USER (no referral required)
+      if (userCount === 0) {
+        const refId = generateRefId();
 
-      await user.save();
+        user = new User({
+          telegramId,
+          username,
+          referralId: refId
+        });
 
-      // 👇 Parent add (downline)
-      const parent = await User.findOne({
-        referralId: ref
-      });
+        await user.save();
+      } else {
+        // 🔴 REFERRAL REQUIRED
+        if (!ref) {
+          return res.status(400).json({ error: "Referral required" });
+        }
 
-      if (parent) {
+        const parent = await User.findOne({ referralId: ref });
+
+        if (!parent) {
+          return res.status(400).json({ error: "Invalid referral" });
+        }
+
+        const refId = generateRefId();
+
+        user = new User({
+          telegramId,
+          username,
+          referralId: refId,
+          referredBy: ref
+        });
+
+        await user.save();
+
+        // ➕ add to parent
         parent.referrals.push(user._id);
         await parent.save();
       }
     }
 
-    // 🔗 Referral Link
     const referralLink = `https://t.me/${process.env.BOT_USERNAME}?start=${user.referralId}`;
 
     res.json({
