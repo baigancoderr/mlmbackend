@@ -73,7 +73,9 @@ ${referralLink}`,
               [
                 {
                   text: "🚀 Open App",
-                  web_app: { url: process.env.WEB_APP_URL }
+                  web_app: { 
+  url: `${process.env.WEB_APP_URL}?ref=${user.referralId}` 
+}
                 }
               ]
             ]
